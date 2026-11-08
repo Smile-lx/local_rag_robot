@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SPD 智能客服 · 聊天</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>本地知识库AI助手</h1>
+    <nav>
+      <a href="index.html" class="active">聊天</a>
+      <a href="knowledge.html">知识管理</a>
+    </nav>
+    <span id="backend-status" class="status">检测后端中…</span>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <button id="new-conversation-btn" type="button">＋ 新建会话</button>
+      <ul id="conversation-list" class="conversation-list">
+        <li class="conversation-empty">加载中…</li>
+      </ul>
+    </aside>
+
+    <main class="chat-main">
+      <div id="error-banner" class="banner banner-error hidden" role="alert"></div>
+      <div id="messages" class="messages">
+        <div class="empty-hint">输入问题开始提问…</div>
+      </div>
+      <div class="composer">
+        <textarea id="question-input" rows="2"
+          placeholder="输入问题（Enter 发送，Shift+Enter 换行）"></textarea>
+        <button id="send-btn" type="button">发送</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

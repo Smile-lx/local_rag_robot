@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SPD 智能客服 · 知识管理</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>本地知识库AI助手-知识库</h1>
+    <nav>
+      <a href="index.html">聊天</a>
+      <a href="knowledge.html" class="active">知识管理</a>
+    </nav>
+  </header>
+
+  <main class="knowledge-main">
+    <div id="error-banner" class="banner banner-error hidden" role="alert"></div>
+    <div id="success-banner" class="banner banner-success hidden" role="status"></div>
+
+    <section class="card">
+      <h2>录入文档</h2>
+      <form id="doc-form">
+        <label for="doc-file-input">上传原始文件（.md / .txt）—— 选择后自动填充下方标题与正文，仍可手工修改</label>
+        <input id="doc-file-input" type="file" accept=".md,.txt">
+        <div id="file-load-hint" class="file-hint hidden"></div>
+
+        <label for="doc-title-input">标题</label>
+        <input id="doc-title-input" type="text" placeholder="例如：血糖试纸使用与保存说明" required>
+
+        <label for="doc-content-textarea">正文（Markdown 或纯文本）</label>
+        <textarea id="doc-content-textarea" rows="10"
+          placeholder="粘贴文档全文，或通过上方按钮选择本地 .md / .txt 文件；支持 Markdown 标题（#、##…），入库时将按标题与长度自动切片。"
+          required></textarea>
+
+        <button id="submit-doc-btn" type="submit">提交入库</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>文档列表</h2>
+      <table class="doc-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>标题</th>
+            <th>切片数</th>
+            <th>创建时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="doc-table-body">
+          <tr><td class="table-empty" colspan="5">加载中…</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="knowledge.js"></script>
+</body>
+</html>

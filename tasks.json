@@ -1,0 +1,195 @@
+{
+  "requirement": "47846874",
+  "created": "2026-10-24",
+  "description": "医院 SPD 智能客服智能体：Python RAG（切片/向量检索/生成三级降级）+ SQLite + Chroma + FastAPI RESTful + 零构建链前端",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "项目地基：骨架/配置/SQLite/依赖清单",
+      "description": "按 requirements/47846874/design.md『环境事实/目录结构/数据库设计』实现：backend/__init__.py、backend/config.py（.env 读取+路径推导+参数 RAG_TOP_K=4、RAG_MIN_SCORE=0.30、CHUNK_TARGET=450、CHUNK_OVERLAP=70、HF_ENDPOINT 默认 https://hf-mirror.com、LLM_API_BASE/LLM_API_KEY/LLM_MODEL、OLLAMA_MODEL、DB_PATH、VECTOR_DIR）、backend/db.py（sqlite3 连接、执行 sql/schema.sql 初始化、通用查询助手、PRAGMA foreign_keys=ON、UTC ISO8601）、backend/api/__init__.py 与 backend/rag/__init__.py 空包、sql/schema.sql（conversations/messages/documents/chunks 4 表+索引）、requirements.txt（fastapi/uvicorn/chromadb/sentence-transformers/requests/python-dotenv/pytest）、.env.example（全部配置项带注释）；创建空目录 data/docs、data/vectorstore、frontend、tools（.gitkeep 占位）。",
+      "files": [
+        "requirements/47846874/backend/__init__.py",
+        "requirements/47846874/backend/config.py",
+        "requirements/47846874/backend/db.py",
+        "requirements/47846874/backend/api/__init__.py",
+        "requirements/47846874/backend/rag/__init__.py",
+        "requirements/47846874/sql/schema.sql",
+        "requirements/47846874/requirements.txt",
+        "requirements/47846874/.env.example"
+      ],
+      "acceptance": [
+        "requirements/47846874 下 py -3 -c \"from backend import config, db\" 导入成功",
+        "db.init_db() 后 SQLite 文件生成，sqlite_master 含 4 表与索引",
+        "py -3 -m pip install -r requirements.txt 成功（torch 等大依赖属预期不算失败）",
+        ".env.example 覆盖 design.md 全部配置项且带注释",
+        "代码符合 knowledge/conventions/python.md（类型注解、pathlib、open 显式 utf-8、无裸 except）"
+      ],
+      "depends_on": [],
+      "status": "done",
+      "attempts": 0
+    },
+    {
+      "id": "T2",
+      "title": "SPD 示例语料与切片器",
+      "description": "按 requirements/47846874/design.md『切片策略』实现 backend/rag/chunker.py：Chunk dataclass(seq:int, text:str, section_path:str)；按 ^#{1,6}\\s MULTILINE 切逻辑段，section_path 沿途标题 ' / ' 连接；段内 >500 字递归字符切，分隔符优先级 [\"\\n\\n\",\"\\n\",\"。\",\"；\",\"，\",\"\"]，目标 400~500 字、相邻块重叠 60~80 字；<50 字碎片并入下一段。另编写 data/docs/ 下 4 份语料 spd_catalog.md（耗材目录与说明）、spd_requisition.md（科室申领流程）、spd_delivery.md（配送与结算规则）、spd_vendor.md（供应商资质要求），每份 ≥600 字、含多级标题与条目化内容（便于切多片）；加 _qa_pairs.md 验收对照表 ≥5 组『问题 | 答案应命中的关键词 1~3 个』，须覆盖血糖试纸/领用流程/配送时效三主题。",
+      "files": [
+        "requirements/47846874/backend/rag/chunker.py",
+        "requirements/47846874/data/docs/spd_catalog.md",
+        "requirements/47846874/data/docs/spd_requisition.md",
+        "requirements/47846874/data/docs/spd_delivery.md",
+        "requirements/47846874/data/docs/spd_vendor.md",
+        "requirements/47846874/data/docs/_qa_pairs.md"
+      ],
+      "acceptance": [
+        "4 份语料每份 ≥600 字且各含 ≥2 级标题结构",
+        "_qa_pairs.md ≥5 组且覆盖三主题，关键词能在对应语料原文中找到",
+        "chunker 对含标题+超长段的构造样例：切片带 seq/section_path、长度不超上限、相邻片有重叠、短段被并入",
+        "对 4 份真实语料跑 chunker 得到 ≥2 片/份且无空片",
+        "代码符合 knowledge/conventions/python.md"
+      ],
+      "depends_on": [],
+      "status": "done",
+      "attempts": 0
+    },
+    {
+      "id": "T3",
+      "title": "向量存储与入库管道（embedder/Chroma/双写双清）",
+      "description": "按 requirements/47846874/design.md『向量存储』实现 backend/rag/embedder.py（SentenceTransformer('BAAI/bge-small-zh-v1.5') 模块级单例、normalize_embeddings=True、encode_documents/encode_query）、backend/rag/vectorstore.py（PersistentClient(path=VECTOR_DIR)、collection 'spd_chunks'、metadata hnsw:space=cosine；接口冻结：add_chunks(chunks, doc_id, doc_title)、search(query, k=4)->list[Hit]、delete_by_doc(doc_id)、count()；记录 id=f'{doc_id}:{seq}'，metadata 含 doc_id/seq/section_path/doc_title）、backend/rag/ingest.py（ingest_document(title, content)->(doc_id, chunk_count)：查重 filename、chunker 切片、SQLite documents/chunks 双写、Chroma add；delete_document(doc_id)：先 Chroma delete_by_doc 再删 SQLite，任一失败不落半态；'_' 开头 filename 跳过入库）。",
+      "files": [
+        "requirements/47846874/backend/rag/embedder.py",
+        "requirements/47846874/backend/rag/vectorstore.py",
+        "requirements/47846874/backend/rag/ingest.py"
+      ],
+      "acceptance": [
+        "对一份样例文档执行 ingest 后：SQLite documents/chunks 有记录，Chroma count() 一致",
+        "search 返回 Hit 列表含 score，top1 命中样例文档自句查询",
+        "delete_document 后 SQLite 无记录且 Chroma count() 减少、检索不再命中",
+        "相同 filename 重复 ingest 幂等（更新）或返回明确错误，不产生重复文档",
+        "首次运行 embedding 模型下载失败时给出明确报错指引（HF_ENDPOINT/镜像）"
+      ],
+      "depends_on": ["T1", "T2"],
+      "status": "done",
+      "attempts": 1
+    },
+    {
+      "id": "T4",
+      "title": "LLM 客户端三级降级与 RAG 问答管道",
+      "description": "按 requirements/47846874/design.md『LLM 客户端三级降级』『RAG 问答管道』实现 backend/rag/llm_client.py（优先级：.env 有 LLM_API_KEY → requests POST {LLM_API_BASE}/chat/completions timeout 60s；否则探测 http://127.0.0.1:11434/api/tags 2s → ollama POST /api/chat 用 OLLAMA_MODEL；都不可用 mode='retrieval_only'；异常捕获具体类型逐级下落，禁裸 except）、backend/rag/qa.py（answer(question, conversation_id=None, label=None)：search k=RAG_TOP_K → 最高分<RAG_MIN_SCORE 或无命中 → mode='refusal' 固定兜底文案不编造；否则组装系统/用户提示词（资料块带 [来源: 文档名#切片号] 前缀）→ LLM 成功 mode='llm'；失败/未配置 mode='retrieval_only' 拼接 top 片段原文并标注降级 → ChatResult(answer, sources, mode, conversation_id)，question/answer 经 chat_store 落库，会话不存在自动创建）、backend/rag/chat_store.py（conversations/messages 增查、message_count、sources_json 序列化）。",
+      "files": [
+        "requirements/47846874/backend/rag/llm_client.py",
+        "requirements/47846874/backend/rag/qa.py",
+        "requirements/47846874/backend/rag/chat_store.py"
+      ],
+      "acceptance": [
+        "无 key 无 ollama：answer 返回 mode='retrieval_only'，answer 含检索片段与降级标注",
+        ".env 指向不可达 API 地址：降级为 retrieval_only 而非崩溃，耗时受 timeout 约束",
+        "无关问题：mode='refusal'，文案含『知识库中未找到』，sources 为空",
+        "monkeypatch llm_client 为固定回答时：mode='llm'，答案/来源/会话均落库",
+        "chat_store：新建会话、消息追加、message_count 与 GET 契约字段一致"
+      ],
+      "depends_on": ["T1", "T3"],
+      "status": "done",
+      "attempts": 0
+    },
+    {
+      "id": "T5",
+      "title": "FastAPI 后端：8 端点与静态托管",
+      "description": "按 requirements/47846874/design.md『RESTful 契约』实现 backend/api/main.py（create_app()：CORS allow_origins=['*']，注册三组路由，app.mount('/', StaticFiles(directory=frontend, html=True)) 在路由之后，uvicorn 入口 if __name__=='__main__'）、routes_chat.py（POST /api/chat：参数校验 question 非空，调 qa.answer，按契约返回 conversation_id/answer/mode/sources）、routes_conversations.py（GET /api/conversations 列表含 message_count；GET /api/conversations/{id} 404 或全量消息）、routes_documents.py（GET /api/documents 含 chunk_count；POST /api/documents 201 触发 ingest；GET /api/documents/{id}/chunks；DELETE /api/documents/{id} 双清后返回 chunks_removed）。",
+      "files": [
+        "requirements/47846874/backend/api/main.py",
+        "requirements/47846874/backend/api/routes_chat.py",
+        "requirements/47846874/backend/api/routes_conversations.py",
+        "requirements/47846874/backend/api/routes_documents.py"
+      ],
+      "acceptance": [
+        "uvicorn 启动后 GET /api/health 200 {status:ok}",
+        "契约表 8 端点逐一 curl 验证状态码与字段名完全一致",
+        "DELETE 文档后 POST /api/chat 相关问题不再命中该文档内容",
+        "GET / 返回聊天页 HTML，静态资源 200",
+        "question 缺失/空 → 422 或 400（README 注明）"
+      ],
+      "depends_on": ["T1", "T3", "T4"],
+      "status": "done",
+      "attempts": 0
+    },
+    {
+      "id": "T6",
+      "title": "前端静态页：聊天页与知识管理页（零构建链）",
+      "description": "按 requirements/47846874/design.md『前端』『RESTful 契约』实现 frontend/index.html（聊天页：左会话栏新建/列表、主区消息流含答案+mode 标注（降级/拒答提示样式）+来源列表（文档名#切片号+得分）、底部输入框 Enter 发送、请求失败显示错误不白屏）、frontend/knowledge.html（知识管理页：文档表格 标题/切片数/时间/删除按钮、录入表单 标题+正文 textarea、提交后刷新列表、删除需确认）、frontend/style.css（两页共用、简洁可用即可不做美化竞赛）、frontend/app.js 与 frontend/knowledge.js（原生 fetch 按 design.md 契约路径与字段、无框架无构建、ES6 语法）。两页顶部互链。",
+      "files": [
+        "requirements/47846874/frontend/index.html",
+        "requirements/47846874/frontend/knowledge.html",
+        "requirements/47846874/frontend/style.css",
+        "requirements/47846874/frontend/app.js",
+        "requirements/47846874/frontend/knowledge.js"
+      ],
+      "acceptance": [
+        "仅用 design.md 冻结契约中的路径与字段，无臆造接口",
+        "JS 无语法错误（node --check 或等价方式验证），HTML 标签闭合、DOM id 与 JS 引用一致",
+        "API 不可用时页面有可见错误提示（fetch catch 分支）",
+        "无任何构建依赖（无 package.json/node_modules/CDN 外链）",
+        "页面在无后端时直接打开不抛未捕获异常阻塞渲染"
+      ],
+      "depends_on": [],
+      "status": "done",
+      "attempts": 0
+    },
+    {
+      "id": "T7",
+      "title": "README 与检索评估脚本（recall@k + MRR）",
+      "description": "按 requirements/47846874/design.md『评估脚本』实现 tools/eval_recall.py：解析 data/docs/_qa_pairs.md 的问题|关键词对照 → 对 chunk 目标 300/400/600 三组参数用 chunker 重新切片并重建到临时向量库目录（不动 data/vectorstore 正式库）→ 逐题 search → 输出对比表（每组：recall@3、recall@5、MRR），复用 ingest/chunker 内部函数不重复造轮子。另写 requirements/47846874/README.md：项目简介、≤5 条命令完成安装+启动（pip install -r → 复制 .env.example → uvicorn 启动）、接口清单（design.md 契约表）、配置说明（LLM 三级降级、HF_ENDPOINT 镜像、RAG_TOP_K/MIN_SCORE）、目录结构、测试运行方式、已知限制。",
+      "files": [
+        "requirements/47846874/README.md",
+        "requirements/47846874/tools/eval_recall.py"
+      ],
+      "acceptance": [
+        "eval_recall.py 跑通并输出 3 组参数 × 3 指标的对比表",
+        "按 README 步骤在干净环境（删 data/*.db 与 vectorstore 后）≤5 命令启动成功且 /api/health 200",
+        "README 接口清单与实际路由一致（逐条可 curl）",
+        "README 含降级模式说明（无 key 时表现为 retrieval_only 属预期）"
+      ],
+      "depends_on": ["T2", "T5"],
+      "status": "done",
+      "attempts": 0
+    },
+    {
+      "id": "T8",
+      "title": "知识管理页增强：原始文件上传 + 分片管理界面",
+      "description": "用户 2026-10-25 追加需求：本地知识库页面上能点击上传知识原始文件，上传内容后分片并入知识库统一管理，并有分片管理界面。在现有 frontend/knowledge.html、knowledge.js、style.css 上增强（保持零构建链，仅用 design.md 冻结契约，不新增后端接口）：① 原始文件上传：input type=file 点击选择 .md/.txt 文件，浏览器 FileReader 读取文本，标题预填文件名（可改）、正文预览，提交走既有 POST /api/documents {title, content}，成功后刷新文档列表并提示切片数；② 分片管理界面：文档表格每行加『查看分片』，点击调 GET /api/documents/{id}/chunks，展开显示该文档全部分片（seq、section_path、文本，长文本可折叠），可收起；分片由后端返回，前端不重复实现切片逻辑；③ 保留手工录入表单与删除（带确认）不回退。",
+      "files": [
+        "requirements/47846874/frontend/knowledge.html",
+        "requirements/47846874/frontend/knowledge.js",
+        "requirements/47846874/frontend/style.css"
+      ],
+      "acceptance": [
+        "页面可点击选择 .md/.txt 文件一键上传（标题默认=文件名可改），成功后列表刷新且 chunk_count 显示",
+        "每个文档可展开查看分片列表（seq/section_path/文本），字段与 GET /api/documents/{id}/chunks 契约完全一致",
+        "仅用 design.md 冻结契约的路径与字段，无臆造接口；无任何构建依赖（无 package.json/CDN 外链）",
+        "JS 无语法错误（node --check），HTML 标签闭合、DOM id 与 JS 引用一致",
+        "API 不可用时可见错误提示；手工录入与删除功能不回退"
+      ],
+      "depends_on": ["T6"],
+      "status": "done",
+      "attempts": 0
+    },
+    {
+      "id": "T9",
+      "title": "多轮对话上下文：每次问答回顾最近三轮对话",
+      "description": "用户 2026-10-25 追加：每次 /api/chat 请求需回顾最近三轮对话上下文。①chat_store 增加 recent_turns(conversation_id, turns=3)（最近 3 组 user/assistant 消息对，时间升序）；②qa.answer 在 conversation_id 存在时结合历史：检索侧用当前问题+最近用户问题拼接增强召回，生成侧提示词注入最近三轮对话（每条截断 ~200 字防 token 爆炸），系统提示说明结合历史理解追问；③无 conversation_id/首问行为与现状一致；④契约字段不变、refusal/retrieval_only 不回退；⑤当前 qa.py 已含 verify.py 防幻觉与敏感外发闸（并行会话 2026-10-25 追加），在其基础上集成不得破坏。",
+      "files": [
+        "requirements/47846874/backend/rag/qa.py",
+        "requirements/47846874/backend/rag/chat_store.py"
+      ],
+      "acceptance": [
+        "同一会话连续两问（第二问为指代性追问如『那它的配送时效呢』）：第二问能结合上下文命中正确语料并作答（与无上下文单问形成对照）",
+        "无 conversation_id 或新会话首问：行为与现状完全一致（回归）",
+        "历史注入有长度上限（单条+总长），超长截断不抛错",
+        "RESTful 契约字段不变；refusal/retrieval_only/verified 各模式不回退",
+        "chat_store.recent_turns 契约：3 组=6 条升序、不足全量、无会话空列表"
+      ],
+      "depends_on": ["T4", "T5"],
+      "status": "done",
+      "attempts": 1
+    }
+  ]
+}
